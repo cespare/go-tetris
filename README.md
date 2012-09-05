@@ -4,6 +4,15 @@ A simple terminal tetris implementation in Go.
 
 		$ go run tetris.go
 
+## Controls
+
+* Move piece down: `↓`, `j`
+* Move piece left: `←`, `h`
+* Move piece right: `→`, `l`
+* Rotate piece: `↑`, `k`
+* Quick drop: `space`
+* Quit: `q`, `ctrl-c`
+
 ## Implemented features
 
 * Random piece generation

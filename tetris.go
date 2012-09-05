@@ -205,6 +205,8 @@ func waitForUserEvent() GameEvent {
 			case termbox.KeyArrowRight:
 				return MoveRight
 			case termbox.KeyArrowDown:
+				return MoveDown
+			case termbox.KeySpace:
 				return QuickDrop
 			}
 		} else {
@@ -218,7 +220,7 @@ func waitForUserEvent() GameEvent {
 			case 'l':
 				return MoveRight
 			case 'j':
-				return QuickDrop
+				return MoveDown
 			}
 		}
 	case termbox.EventError:
