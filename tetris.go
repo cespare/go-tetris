@@ -14,7 +14,7 @@ import (
 
 const (
 	width      = 10
-	height     = 15
+	height     = 18
 	initialX   = 4
 	piecesFile = "./pieces.txt"
 )
@@ -97,9 +97,12 @@ func NewBoard() *Board {
 }
 
 type Game struct {
-	board     *Board
-	nextPiece *Piece
-	pieces    []Piece
+	board           *Board
+	nextPiece       *Piece
+	pieces          []Piece
+	over            bool
+	dropDelayMillis int
+	ticker          *time.Ticker
 }
 
 // Load in the visual representations of pieces from the file containing the piece shapes and emit an array of
@@ -154,53 +157,101 @@ func NewGame() *Game {
 	game.board.currentPiece = game.GeneratePiece()
 	game.board.currentPosition = Vector{initialX, 0}
 	game.nextPiece = game.GeneratePiece()
+	game.over = false
+	// Start off the delay at 3/4 of a second.
+	game.dropDelayMillis = 750
+	game.setupGameTicker()
 	return game
 }
+
+func (game *Game) setupGameTicker() {
+	game.ticker = time.NewTicker(time.Duration(game.dropDelayMillis) * time.Millisecond)
+}
+
+type GameEvent int
+
+const (
+	MoveLeft GameEvent = iota
+	MoveRight
+	MoveDown
+	Rotate
+	QuickDrop
+	Quit
+	NoEvent // An event that doesn't cause a change to game state; e.g., a window resize.
+)
 
 func (game *Game) Start() {
 	game.board.Draw()
 gameLoop:
 	for {
-		gameOver := false
-		switch event := termbox.PollEvent(); event.Type {
-		// Movement: arrow keys or vim controls (h, j, k, l)
-		// Exit: 'q' or ctrl-c.
-		case termbox.EventKey:
-			if event.Ch == 0 { // A special key combo was pressed
-				switch event.Key {
-				case termbox.KeyCtrlC:
-					break gameLoop
-				case termbox.KeyArrowLeft:
-					gameOver = game.Move(Left)
-				case termbox.KeyArrowUp:
-					game.Rotate()
-				case termbox.KeyArrowRight:
-					gameOver = game.Move(Right)
-				case termbox.KeyArrowDown:
-					gameOver = game.Move(Down)
-				}
-			} else {
-				switch event.Ch {
-				case 'q':
-					break gameLoop
-				case 'h':
-					gameOver = game.Move(Left)
-				case 'k':
-					game.Rotate()
-				case 'l':
-					gameOver = game.Move(Right)
-				case 'j':
-					gameOver = game.Move(Down)
-				}
-			}
-		case termbox.EventError:
-			panic(event.Err)
+		eventChan := make(chan GameEvent, 1)
+		go func() { eventChan <- waitForUserEvent() }()
+		var event GameEvent
+		select {
+		case event = <-eventChan:
+		case <-game.ticker.C:
+			event = MoveDown
 		}
-		if gameOver {
+		switch event {
+		case MoveLeft:
+			game.Move(Left)
+		case MoveRight:
+			game.Move(Right)
+		case MoveDown:
+			game.Move(Down)
+		case Rotate:
+			game.Rotate()
+		case Quit:
+			break gameLoop
+		}
+		if game.over {
 			break gameLoop
 		}
 		game.board.Draw()
 	}
+}
+
+func waitForTick(ticker *time.Ticker) GameEvent {
+	<-ticker.C
+	return MoveDown
+}
+
+func waitForUserEvent() GameEvent {
+	switch event := termbox.PollEvent(); event.Type {
+	// Movement: arrow keys or vim controls (h, j, k, l)
+	// Exit: 'q' or ctrl-c.
+	case termbox.EventKey:
+		if event.Ch == 0 { // A special key combo was pressed
+			switch event.Key {
+			case termbox.KeyCtrlC:
+				return Quit
+			case termbox.KeyArrowLeft:
+				return MoveLeft
+			case termbox.KeyArrowUp:
+				return Rotate
+			case termbox.KeyArrowRight:
+				return MoveRight
+			case termbox.KeyArrowDown:
+				return MoveDown
+			}
+		} else {
+			switch event.Ch {
+			case 'q':
+				return Quit
+			case 'h':
+				return MoveLeft
+			case 'k':
+				return Rotate
+			case 'l':
+				return MoveRight
+			case 'j':
+				return MoveDown
+			}
+		}
+	case termbox.EventError:
+		panic(event.Err)
+	}
+	return NoEvent
 }
 
 func (game *Game) GeneratePiece() *Piece {
@@ -243,8 +294,8 @@ func (game *Game) anchor() bool {
 	return true
 }
 
-// Attempt to move. Returns whether the game ends as a result.
-func (game *Game) Move(where Direction) bool {
+// Attempt to move.
+func (game *Game) Move(where Direction) {
 	translation := Vector{0, 0}
 	switch where {
 	case Down:
@@ -257,12 +308,10 @@ func (game *Game) Move(where Direction) bool {
 	// Attempt to make the move.
 	moved := game.board.moveIfPossible(translation)
 
-	gameOver := false
 	// Perform anchoring if we tried to move down but we were unsuccessful.
 	if where == Down && !moved {
-		gameOver = !game.anchor()
+		game.over = !game.anchor()
 	}
-	return gameOver
 }
 
 func (game *Game) Rotate() bool {
