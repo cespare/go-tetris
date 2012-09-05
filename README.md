@@ -23,12 +23,14 @@ A simple terminal tetris implementation in Go.
 * Line clearing
 * Rotation
 * Piece colors
+* Print next piece
 
 ## To implement
 
-* Speeding up
 * Scoring
-* Print next piece
 * Line clearing/game over animations
+* Speeding up
 * Pausing
 * Music + sound effects
+* 'Ghost' piece showing where your piece will land
+* High scores

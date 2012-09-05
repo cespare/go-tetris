@@ -148,18 +148,25 @@ const (
 	Rotate
 	QuickDrop
 	Quit
-	NoEvent // An event that doesn't cause a change to game state; e.g., a window resize.
+	// An event that doesn't cause a change to game state but causes a full redraw; e.g., a window resize.
+	Redraw
 )
 
 func (game *Game) Start() {
-	game.board.Draw()
+	game.Draw(true)
+
+	eventQueue := make(chan GameEvent, 100)
+	go func() {
+		for {
+			eventQueue <- waitForUserEvent()
+		}
+	}()
 gameLoop:
 	for {
-		eventChan := make(chan GameEvent, 1)
-		go func() { eventChan <- waitForUserEvent() }()
+		fullRedraw := false
 		var event GameEvent
 		select {
-		case event = <-eventChan:
+		case event = <-eventQueue:
 		case <-game.ticker.C:
 			event = MoveDown
 		}
@@ -176,11 +183,13 @@ gameLoop:
 			game.Rotate()
 		case Quit:
 			break gameLoop
+		case Redraw:
+			fullRedraw = true
 		}
 		if game.over {
 			break gameLoop
 		}
-		game.board.Draw()
+		game.Draw(fullRedraw)
 	}
 }
 
@@ -223,10 +232,12 @@ func waitForUserEvent() GameEvent {
 				return MoveDown
 			}
 		}
+	case termbox.EventResize:
+		return Redraw
 	case termbox.EventError:
 		panic(event.Err)
 	}
-	return NoEvent
+	return Redraw // Should never be reached
 }
 
 func (game *Game) GeneratePiece() *Piece {
@@ -308,6 +319,7 @@ func (game *Game) anchor() {
 	game.board.currentPiece = game.nextPiece
 	game.board.currentPosition = Vector{initialX, 0}
 	game.nextPiece = game.GeneratePiece()
+	game.nextPiece.currentRotation = 0
 
 	if game.board.currentPieceInCollision() {
 		game.over = true
@@ -364,33 +376,160 @@ func (board *Board) CellColor(position Vector) termbox.Attribute {
 	return termbox.ColorDefault
 }
 
-func (board *Board) Draw() {
-	termbox.Clear(termbox.ColorDefault, termbox.ColorDefault)
-
-	// Print the borders. The internal cells (the board cells) are treated as pairs, so to keep them on even x
-	// coordinates we'll put an empty column on the left side.
-	termbox.SetCell(1, 0, 0x256D, termbox.ColorBlue, termbox.ColorDefault)
-	termbox.SetCell(width*2+2, 0, 0x256E, termbox.ColorBlue, termbox.ColorDefault)
-	termbox.SetCell(1, height+1, 0x2570, termbox.ColorBlue, termbox.ColorDefault)
-	termbox.SetCell(width*2+2, height+1, 0x256F, termbox.ColorBlue, termbox.ColorDefault)
-	for x := 2; x <= width*2+1; x++ {
-		termbox.SetCell(x, 0, 0x2500, termbox.ColorBlue, termbox.ColorDefault)
-		termbox.SetCell(x, height+1, 0x2500, termbox.ColorBlue, termbox.ColorDefault)
+// Print a message in white text.
+func printString(x, y int, message string) {
+	for i, ch := range message {
+		termbox.SetCell(x+i, y, ch, termbox.ColorWhite, termbox.ColorDefault)
 	}
-	for y := 1; y <= height; y++ {
-		termbox.SetCell(1, y, 0x2502, termbox.ColorBlue, termbox.ColorDefault)
-		termbox.SetCell(width*2+2, y, 0x2502, termbox.ColorBlue, termbox.ColorDefault)
+}
+
+// Print a message vertically in white text.
+func printStringVertical(x, y int, message string) {
+	for i, ch := range message {
+		termbox.SetCell(x, y+i, ch, termbox.ColorWhite, termbox.ColorDefault)
+	}
+}
+
+// Print a box-drawing border character.
+func printBorderCharacter(x, y int, ch rune) {
+	termbox.SetCell(x, y, ch, termbox.ColorBlue, termbox.ColorDefault)
+}
+
+/*
+
+  +---------------------------------------+
+  |                 header                |
+  +-----------------------+---------------+
+	|                       |               |
+	|                       |   preview     |
+	|                       |               |
+  |                       |               |
+	|        board          +---------------+
+	|   (width x height)    |               |
+	|                       |               |
+	|                       |    score      |
+	|                       |               |
+	|                       |               |
+	+-----------------------+---------------+
+	|                                       |
+	|             instructions              |
+	|                                       |
+	+---------------------------------------+
+
+*/
+func (game *Game) Draw(fullRedraw bool) {
+
+	headerHeight := 5
+	previewHeight := 6
+	/*scoreHeight := height - previewHeight - 1*/
+	sidebarWidth := 20
+	instructionsHeight := 10
+
+	// The internal cells (the board cells) are treated as pairs, so to keep them on even x coordinates we'll
+	// put an empty column on the left side.
+	totalHeight := headerHeight + height + instructionsHeight + 2
+	totalWidth := (width * 2) + sidebarWidth + 1
+
+	// We don't need to redraw the static stuff termbox's buffer every time we move a piece.
+	// See http://en.wikipedia.org/wiki/Box-drawing_character for unicode characters.
+	if fullRedraw {
+		termbox.Clear(termbox.ColorDefault, termbox.ColorDefault)
+
+		// Print the borders.
+		for x := 2; x < totalWidth+2; x++ {
+			printBorderCharacter(x, 0, '─')
+			printBorderCharacter(x, headerHeight+1, '─')
+			printBorderCharacter(x, headerHeight+height+2, '─')
+			printBorderCharacter(x, totalHeight+1, '─')
+		}
+		for x := width+2; x < totalWidth+2; x++ {
+			printBorderCharacter(x, headerHeight+previewHeight+2, '─')
+		}
+		for y := 1; y < totalHeight+1; y++ {
+			printBorderCharacter(1, y, '│')
+			printBorderCharacter(totalWidth+2, y, '│')
+		}
+		// Bold borders around the board
+		for x := 2; x < (width*2)+2; x++ {
+			printBorderCharacter(x, headerHeight+1, '━')
+			printBorderCharacter(x, headerHeight+height+2, '━')
+		}
+		for y := headerHeight+2; y < headerHeight+height+2; y++ {
+			printBorderCharacter(1, y, '┃')
+			printBorderCharacter((width*2)+2, y, '┃')
+		}
+		// Print the various corners
+		printBorderCharacter(1, 0, '┌')
+		printBorderCharacter(totalWidth+2, 0, '┐')
+		printBorderCharacter(totalWidth+2, totalHeight+1, '┘')
+		printBorderCharacter(1, totalHeight+1, '└')
+		printBorderCharacter(1, headerHeight+1, '┢')
+		printBorderCharacter((width*2)+2, headerHeight+1, '┱')
+		printBorderCharacter(totalWidth+2, headerHeight+1, '┤')
+		printBorderCharacter((width*2)+2, headerHeight+previewHeight+2, '┠')
+		printBorderCharacter(totalWidth+2, headerHeight+previewHeight+2, '┤')
+		printBorderCharacter(1, headerHeight+height+2, '┡')
+		printBorderCharacter((width*2)+2, headerHeight+height+2, '┹')
+		printBorderCharacter(totalWidth+2, headerHeight+height+2, '┤')
+
+		// Print the header logo
+		header := []string{"",
+			"   ____         _____    _        _     ",
+			"  / ___| ___   |_   _|__| |_ _ __(_)___ ",
+			" | |  _ / _ \\    | |/ _ \\ __| '__| / __|",
+			" | |_| | (_) |   | |  __/ |_| |  | \\__ \\",
+			"  \\____|\\___/    |_|\\___|\\__|_|  |_|___/",
+		}
+		for i, line := range header {
+			printString(2, i, line)
+		}
+
+		// Print the "NEXT" text vertically
+		printStringVertical((width*2)+5, headerHeight+3, "NEXT")
+
+		// Print the "SCORE" header
+		printString((width*2)+10, headerHeight+previewHeight+4, "SCORE")
+
+		// Print instructions below the game board.
+		instructions := []string{"Controls:",
+			"",
+			"Move left       left arrow or 'h'",
+			"Move right      right arrow or 'l'",
+			"Move down       down arrow or 'j'",
+			"Rotate piece    up arrow or 'k'",
+			"Quick drop      space",
+			"Quit            ctrl-c or 'q'",
+		}
+		for i, message := range instructions {
+			printString(4, headerHeight+height+4+i, message)
+		}
 	}
 
 	// Print the board contents. Each block will correspond to a side-by-side pair of cells in the termbox, so
 	// that the visible blocks will be roughly square.
-	for x := 1; x <= width; x++ {
-		for y := 1; y <= height; y++ {
-			color := board.CellColor(Vector{x - 1, y - 1})
-			termbox.SetCell(x*2, y, ' ', termbox.ColorDefault, color)
-			termbox.SetCell(x*2+1, y, ' ', termbox.ColorDefault, color)
+	for x := 0; x < width; x++ {
+		for y := 0; y < height; y++ {
+			color := game.board.CellColor(Vector{x, y})
+			termbox.SetCell(x*2+2, headerHeight+y+2, ' ', termbox.ColorDefault, color)
+			termbox.SetCell(x*2+3, headerHeight+y+2, ' ', termbox.ColorDefault, color)
 		}
 	}
+
+	// Print the preview piece. Need to clear the box first.
+	previewPieceOffset := Vector{(width*2)+8, headerHeight+3}
+	for x := 0; x < 6; x++ {
+		for y := 0; y < 4; y++ {
+			cursor := previewPieceOffset.plus(Vector{x, y})
+			termbox.SetCell(cursor.x, cursor.y, ' ', termbox.ColorDefault, termbox.ColorDefault)
+		}
+	}
+	for _, point := range game.nextPiece.rotations[0] {
+		cursor := previewPieceOffset.plus(Vector{point.x*2, point.y})
+		termbox.SetCell(cursor.x, cursor.y, ' ', termbox.ColorDefault, game.nextPiece.color)
+		termbox.SetCell(cursor.x+1, cursor.y, ' ', termbox.ColorDefault, game.nextPiece.color)
+	}
+
+	// Print the current score
 
 	termbox.Flush()
 }
