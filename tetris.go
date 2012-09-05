@@ -199,6 +199,8 @@ gameLoop:
 			game.Move(Right)
 		case MoveDown:
 			game.Move(Down)
+		case QuickDrop:
+			game.QuickDrop()
 		case Rotate:
 			game.Rotate()
 		case Quit:
@@ -232,7 +234,7 @@ func waitForUserEvent() GameEvent {
 			case termbox.KeyArrowRight:
 				return MoveRight
 			case termbox.KeyArrowDown:
-				return MoveDown
+				return QuickDrop
 			}
 		} else {
 			switch event.Ch {
@@ -245,7 +247,7 @@ func waitForUserEvent() GameEvent {
 			case 'l':
 				return MoveRight
 			case 'j':
-				return MoveDown
+				return QuickDrop
 			}
 		}
 	case termbox.EventError:
@@ -314,8 +316,19 @@ func (game *Game) Move(where Direction) {
 	}
 }
 
-func (game *Game) Rotate() bool {
-	return true
+func (game *Game) QuickDrop() {
+	moved := false
+	// Move down as far as possible
+	for game.board.moveIfPossible(Vector{0, 1}) {
+		moved = true
+	}
+	// If it wasn't possible to move down at all, anchor the piece.
+	if !moved {
+		game.over = !game.anchor()
+	}
+}
+
+func (game *Game) Rotate() {
 }
 
 func (board *Board) Filled(position Vector) bool {
