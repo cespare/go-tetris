@@ -24,10 +24,10 @@ A simple terminal tetris implementation in Go.
 * Rotation
 * Piece colors
 * Print next piece
+* Scoring
 
 ## To implement
 
-* Scoring
 * Line clearing/game over animations
 * Speeding up
 * Pausing

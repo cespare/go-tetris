@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/nsf/termbox-go"
+	"math"
 	"math/rand"
 	"time"
 )
@@ -115,6 +116,7 @@ type Game struct {
 	over            bool
 	dropDelayMillis int
 	ticker          *time.Ticker
+	score           int
 }
 
 func NewGame() *Game {
@@ -125,6 +127,7 @@ func NewGame() *Game {
 	game.board.currentPosition = Vector{initialX, 0}
 	game.nextPiece = game.GeneratePiece()
 	game.over = false
+	game.score = 0
 	// Start off the delay at 3/4 of a second.
 	game.dropDelayMillis = 750
 	game.startTicker()
@@ -299,22 +302,30 @@ func (board *Board) collapseRow(rowY int) {
 	}
 }
 
-// Clear any complete rows and move the above blocks down.
-func (board *Board) clearRows() {
+// Clear any complete rows and move the above blocks down. Returns the number of cleared rows.
+func (board *Board) clearRows() int {
+	rowsCleared := 0
 	y := height - 1
 	for y >= 0 {
 		for board.rowComplete(y) {
+			rowsCleared += 1
 			board.collapseRow(y)
 		}
 		y -= 1
 	}
+	return rowsCleared
 }
 
-// Anchor the current piece to the board, clears lines, and generate a new piece. Sets the 'game over' state
-// if the new piece overlaps existing pieces.
+// Anchor the current piece to the board, clears lines increments the score, and generate a new piece. Sets
+// the 'game over' state if the new piece overlaps existing pieces.
 func (game *Game) anchor() {
 	game.board.mergeCurrentPiece()
-	game.board.clearRows()
+	rowsCleared := game.board.clearRows()
+	// Scoring -- 1 row -> 100, 2 rows -> 200, ... 4 rows -> 800
+	if rowsCleared > 0 {
+		points := 100 * math.Pow(2, float64(rowsCleared-1))
+		game.score += int(points)
+	}
 
 	game.board.currentPiece = game.nextPiece
 	game.board.currentPosition = Vector{initialX, 0}
@@ -442,7 +453,7 @@ func (game *Game) Draw(fullRedraw bool) {
 			printBorderCharacter(x, headerHeight+height+2, '─')
 			printBorderCharacter(x, totalHeight+1, '─')
 		}
-		for x := width+2; x < totalWidth+2; x++ {
+		for x := width + 2; x < totalWidth+2; x++ {
 			printBorderCharacter(x, headerHeight+previewHeight+2, '─')
 		}
 		for y := 1; y < totalHeight+1; y++ {
@@ -454,7 +465,7 @@ func (game *Game) Draw(fullRedraw bool) {
 			printBorderCharacter(x, headerHeight+1, '━')
 			printBorderCharacter(x, headerHeight+height+2, '━')
 		}
-		for y := headerHeight+2; y < headerHeight+height+2; y++ {
+		for y := headerHeight + 2; y < headerHeight+height+2; y++ {
 			printBorderCharacter(1, y, '┃')
 			printBorderCharacter((width*2)+2, y, '┃')
 		}
@@ -516,7 +527,7 @@ func (game *Game) Draw(fullRedraw bool) {
 	}
 
 	// Print the preview piece. Need to clear the box first.
-	previewPieceOffset := Vector{(width*2)+8, headerHeight+3}
+	previewPieceOffset := Vector{(width * 2) + 8, headerHeight + 3}
 	for x := 0; x < 6; x++ {
 		for y := 0; y < 4; y++ {
 			cursor := previewPieceOffset.plus(Vector{x, y})
@@ -524,13 +535,38 @@ func (game *Game) Draw(fullRedraw bool) {
 		}
 	}
 	for _, point := range game.nextPiece.rotations[0] {
-		cursor := previewPieceOffset.plus(Vector{point.x*2, point.y})
+		cursor := previewPieceOffset.plus(Vector{point.x * 2, point.y})
 		termbox.SetCell(cursor.x, cursor.y, ' ', termbox.ColorDefault, game.nextPiece.color)
 		termbox.SetCell(cursor.x+1, cursor.y, ' ', termbox.ColorDefault, game.nextPiece.color)
 	}
 
-	// Print the current score
+	// Print the current score in big ascii art digits
+	digitToAsciiArt := map[int][]string{0: []string{" __ ", "/  \\", "\\__/"},
+		1: []string{"    ", " /| ", "  | "},
+		2: []string{" __ ", "  _)", " /__"},
+		3: []string{" __ ", "  _)", " __)"},
+		4: []string{"    ", "|__|", "   |"},
+		5: []string{"  __", " |_ ", " __)"},
+		6: []string{" __ ", "/__ ", "\\__)"},
+		7: []string{" ___", "   /", "  / "},
+		8: []string{" __ ", "(__)", "(__)"},
+		9: []string{" __ ", "(__\\", " __/"},
+	}
+	score := game.score
+	cursor := Vector{(width * 2) + 18, headerHeight + previewHeight + 7}
+	for {
+		digit := score % 10
+		score /= 10
+		for i, line := range digitToAsciiArt[digit] {
+			printString(cursor.x, cursor.y+i, line)
+		}
+		cursor = cursor.plus(Vector{-4, 0})
+		if score == 0 {
+			break
+		}
+	}
 
+	// Flush termbox's internal state to the screen.
 	termbox.Flush()
 }
 
