@@ -12,10 +12,10 @@ A simple terminal tetris implementation in Go.
 * Anchoring/switching to the next piece
 * Quick drop
 * Line clearing
+* Rotation
 
 ## To implement
 
-* Rotation
 * Piece colors
 * Speeding up
 * Scoring

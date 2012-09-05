@@ -1,14 +1,9 @@
 package main
 
 import (
-	"bufio"
-	"bytes"
 	"fmt"
 	"github.com/nsf/termbox-go"
-	"io"
 	"math/rand"
-	"os"
-	"strings"
 	"time"
 )
 
@@ -19,35 +14,6 @@ const (
 	piecesFile = "./pieces.txt"
 )
 
-func readLines(path string) (lines []string, err error) {
-	var (
-		file   *os.File
-		part   []byte
-		prefix bool
-	)
-	if file, err = os.Open(path); err != nil {
-		return
-	}
-	defer file.Close()
-
-	reader := bufio.NewReader(file)
-	buffer := bytes.NewBuffer(make([]byte, 0))
-	for {
-		if part, prefix, err = reader.ReadLine(); err != nil {
-			break
-		}
-		buffer.Write(part)
-		if !prefix {
-			lines = append(lines, buffer.String())
-			buffer.Reset()
-		}
-	}
-	if err == io.EOF {
-		err = nil
-	}
-	return
-}
-
 type Vector struct {
 	x, y int
 }
@@ -55,8 +21,60 @@ type Vector struct {
 func (first Vector) plus(second Vector) Vector {
 	return Vector{first.x + second.x, first.y + second.y}
 }
-func (first Vector) minus(second Vector) Vector {
-	return Vector{first.x - second.x, first.y - second.y}
+func (first Vector) equals(second Vector) bool {
+	return first.x == second.x && first.y == second.y
+}
+
+// A particular rotational instance of a piece.
+type PieceInstance []Vector
+
+type Piece struct {
+	rotations       []PieceInstance
+	currentRotation int
+}
+
+func (p *Piece) instance() PieceInstance {
+	return p.rotations[p.currentRotation]
+}
+
+func (p *Piece) rotate() {
+	p.currentRotation = (p.currentRotation + 1) % len(p.rotations)
+}
+
+func (p *Piece) unrotate() {
+	p.currentRotation = (p.currentRotation - 1) % len(p.rotations)
+	if p.currentRotation < 0 {
+		p.currentRotation += len(p.rotations)
+	}
+}
+
+func TetrisPieces() []Piece {
+	return []Piece{Piece{[]PieceInstance{[]Vector{Vector{0, 0}, Vector{1, 0}, Vector{0, 1}, Vector{1, 1}}}, 0},
+		Piece{[]PieceInstance{[]Vector{Vector{0, 0}, Vector{1, 0}, Vector{1, 1}, Vector{2, 1}},
+			[]Vector{Vector{1, 0}, Vector{0, 1}, Vector{1, 1}, Vector{0, 2}},
+		}, 0},
+		Piece{[]PieceInstance{[]Vector{Vector{1, 0}, Vector{2, 0}, Vector{0, 1}, Vector{1, 1}},
+			[]Vector{Vector{0, 0}, Vector{0, 1}, Vector{1, 1}, Vector{1, 2}},
+		}, 0},
+		Piece{[]PieceInstance{[]Vector{Vector{1, 0}, Vector{0, 1}, Vector{1, 1}, Vector{2, 1}},
+			[]Vector{Vector{0, 0}, Vector{0, 1}, Vector{1, 1}, Vector{0, 2}},
+			[]Vector{Vector{0, 0}, Vector{1, 0}, Vector{2, 0}, Vector{1, 1}},
+			[]Vector{Vector{1, 0}, Vector{0, 1}, Vector{1, 1}, Vector{1, 2}},
+		}, 0},
+		Piece{[]PieceInstance{[]Vector{Vector{1, 0}, Vector{1, 1}, Vector{1, 2}, Vector{2, 2}},
+			[]Vector{Vector{0, 1}, Vector{1, 1}, Vector{2, 1}, Vector{0, 2}},
+			[]Vector{Vector{0, 0}, Vector{1, 0}, Vector{1, 1}, Vector{1, 2}},
+			[]Vector{Vector{2, 0}, Vector{0, 1}, Vector{1, 1}, Vector{2, 1}},
+		}, 0},
+		Piece{[]PieceInstance{[]Vector{Vector{1, 0}, Vector{1, 1}, Vector{1, 2}, Vector{0, 2}},
+			[]Vector{Vector{0, 1}, Vector{1, 1}, Vector{2, 1}, Vector{0, 0}},
+			[]Vector{Vector{1, 0}, Vector{2, 0}, Vector{1, 1}, Vector{1, 2}},
+			[]Vector{Vector{0, 1}, Vector{1, 1}, Vector{2, 1}, Vector{2, 2}},
+		}, 0},
+		Piece{[]PieceInstance{[]Vector{Vector{1, 0}, Vector{1, 1}, Vector{1, 2}, Vector{1, 3}},
+			[]Vector{Vector{0, 1}, Vector{1, 1}, Vector{2, 1}, Vector{3, 1}},
+		}, 0},
+	}
 }
 
 // A VectorSet is a Set of Vectors -- the values of the map have the type struct{} so as to not use any space.
@@ -65,10 +83,6 @@ type VectorSet map[Vector]struct{}
 // None is the element used as a value in a VectorSet to indicate the vector's (key's) presence in the set. It
 // is an empty placeholder.
 var None struct{} = struct{}{}
-
-type Piece struct {
-	blocks VectorSet
-}
 
 func (ps VectorSet) contains(p Vector) bool {
 	_, ok := ps[p]
@@ -113,54 +127,9 @@ type Game struct {
 	ticker          *time.Ticker
 }
 
-// Load in the visual representations of pieces from the file containing the piece shapes and emit an array of
-// all possible pieces.
-func loadPieces() (pieces []Piece, err error) {
-	lines, err := readLines(piecesFile)
-	waiting := true
-	blocks := make(VectorSet)
-	pieces = make([]Piece, 0)
-	x, y := 0, 0
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" {
-			if waiting {
-				continue
-			}
-			pieces = append(pieces, Piece{blocks})
-			blocks = make(VectorSet)
-			x, y = 0, 0
-			waiting = true
-		} else {
-			waiting = false
-			for _, char := range line {
-				if char != ' ' {
-					blocks.add(Vector{x, y})
-				}
-				x++
-			}
-			y++
-			x = 0
-		}
-	}
-	if !waiting {
-		pieces = append(pieces, Piece{blocks})
-	}
-	return
-}
-
-func NewPiece(points []Vector) Piece {
-	pointSet := make(VectorSet)
-	for _, point := range points {
-		pointSet.add(point)
-	}
-	return Piece{pointSet}
-}
-
 func NewGame() *Game {
 	game := new(Game)
-	pieces, _ := loadPieces()
-	game.pieces = pieces
+	game.pieces = TetrisPieces()
 	game.board = NewBoard()
 	game.board.currentPiece = game.GeneratePiece()
 	game.board.currentPosition = Vector{initialX, 0}
@@ -272,22 +241,30 @@ func (game *Game) GeneratePiece() *Piece {
 	return &game.pieces[rand.Intn(len(game.pieces))]
 }
 
-func (board *Board) moveIfPossible(translation Vector) bool {
-	attemptedPosition := board.currentPosition.plus(translation)
-	for point, _ := range board.currentPiece.blocks {
-		attemptedPoint := point.plus(attemptedPosition)
+func (board *Board) currentPieceInCollision() bool {
+	for _, point := range board.currentPiece.instance() {
+		attemptedPoint := point.plus(board.currentPosition)
 		if attemptedPoint.x < 0 || attemptedPoint.x >= width ||
 			attemptedPoint.y < 0 || attemptedPoint.y >= height ||
 			board.cells.contains(attemptedPoint) {
-			return false
+			return true
 		}
 	}
-	board.currentPosition = attemptedPosition
+	return false
+}
+
+func (board *Board) moveIfPossible(translation Vector) bool {
+	position := board.currentPosition
+	board.currentPosition = board.currentPosition.plus(translation)
+	if board.currentPieceInCollision() {
+		board.currentPosition = position
+		return false
+	}
 	return true
 }
 
 func (board *Board) mergeCurrentPiece() {
-	for point, _ := range board.currentPiece.blocks {
+	for _, point := range board.currentPiece.instance() {
 		board.cells.add(point.plus(board.currentPosition))
 	}
 }
@@ -340,10 +317,8 @@ func (game *Game) anchor() {
 	game.board.currentPosition = Vector{initialX, 0}
 	game.nextPiece = game.GeneratePiece()
 
-	for point, _ := range game.board.currentPiece.blocks {
-		if game.board.cells.contains(point.plus(game.board.currentPosition)) {
-			game.over = true
-		}
+	if game.board.currentPieceInCollision() {
+		game.over = true
 	}
 }
 
@@ -376,6 +351,10 @@ func (game *Game) QuickDrop() {
 }
 
 func (game *Game) Rotate() {
+	game.board.currentPiece.rotate()
+	if game.board.currentPieceInCollision() {
+		game.board.currentPiece.unrotate()
+	}
 }
 
 func (board *Board) Filled(position Vector) bool {
@@ -385,7 +364,12 @@ func (board *Board) Filled(position Vector) bool {
 	if board.currentPiece == nil {
 		return false
 	}
-	return board.currentPiece.blocks.contains(position.minus(board.currentPosition))
+	for _, point := range board.currentPiece.instance() {
+		if point.plus(board.currentPosition).equals(position) {
+			return true
+		}
+	}
+	return false
 }
 
 func (board *Board) Draw() {
