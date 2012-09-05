@@ -26,10 +26,10 @@ A simple terminal tetris implementation in Go.
 * Print next piece
 * Scoring
 * Game Over
+* Line clearing animations
 
 ## To implement
 
-* Line clearing animations
 * Speeding up
 * Pausing
 * Music + sound effects

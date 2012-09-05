@@ -306,7 +306,7 @@ func (board *Board) collapseRow(rowY int) {
 }
 
 // Clear any complete rows and move the above blocks down. Returns the number of cleared rows.
-func (board *Board) clearRows() int {
+func (board *Board) clearRows() {
 	rowsCleared := 0
 	y := height - 1
 	for y >= 0 {
@@ -316,20 +316,57 @@ func (board *Board) clearRows() int {
 		}
 		y -= 1
 	}
-	return rowsCleared
 }
 
-// Anchor the current piece to the board, clears lines increments the score, and generate a new piece. Sets
+// Find all completed rows.
+func (board *Board) clearedRows() []int {
+	cleared := make([]int, 0)
+	for y := 0; y < height; y++ {
+		if board.rowComplete(y) {
+			cleared = append(cleared, y)
+		}
+	}
+	return cleared
+}
+
+// Anchor the current piece to the board, clears lines, increments the score, and generate a new piece. Sets
 // the 'game over' state if the new piece overlaps existing pieces.
 func (game *Game) anchor() {
 	game.board.mergeCurrentPiece()
-	rowsCleared := game.board.clearRows()
-	// Scoring -- 1 row -> 100, 2 rows -> 200, ... 4 rows -> 800
-	if rowsCleared > 0 {
-		points := 100 * math.Pow(2, float64(rowsCleared-1))
+
+	// Clear any completed rows (with animation) and increment the score if necessary.
+	rowsCleared := game.board.clearedRows()
+
+	if len(rowsCleared) > 0 {
+		// Animate the cleared rows disappearing
+		game.ticker.Stop()
+		flickerCells := make(map[Vector]termbox.Attribute)
+		for _, y := range rowsCleared {
+			for x := 0; x < width; x++ {
+				point := Vector{x, y}
+				flickerCells[point] = game.board.cells[point]
+			}
+		}
+		for i := 0; i < 5; i++ {
+			for point, color := range flickerCells {
+				if i % 2 == 0 {
+					color = termbox.ColorDefault
+				}
+				SetBoardCell(point.x, point.y, color)
+			}
+			termbox.Flush()
+			time.Sleep(80 * time.Millisecond)
+		}
+
+		// Get rid of the rows
+		game.board.clearRows()
+
+		// Scoring -- 1 row -> 100, 2 rows -> 200, ... 4 rows -> 800
+		points := 100 * math.Pow(2, float64(len(rowsCleared)-1))
 		game.score += int(points)
 	}
 
+	// Bring in the next piece.
 	game.board.currentPiece = game.nextPiece
 	game.board.currentPosition = Vector{initialX, 0}
 	game.nextPiece = game.GeneratePiece()
@@ -390,6 +427,25 @@ func (board *Board) CellColor(position Vector) termbox.Attribute {
 	return termbox.ColorDefault
 }
 
+var (
+	headerHeight       = 5
+	previewHeight      = 6
+	sidebarWidth       = 20
+	instructionsHeight = 10
+
+	// The internal cells (the board cells) are treated as pairs, so to keep them on even x coordinates we'll
+	// put an empty column on the left side.
+	totalHeight = headerHeight + height + instructionsHeight + 2
+	totalWidth  = (width * 2) + sidebarWidth + 1
+)
+
+// A board cell is two terminal cells wide, for squaritude. Only need to set the whole bg color (for filling
+// in a cell).
+func SetBoardCell(x, y int, color termbox.Attribute) {
+	termbox.SetCell(x*2+2, headerHeight+y+2, ' ', termbox.ColorDefault, color)
+	termbox.SetCell(x*2+3, headerHeight+y+2, ' ', termbox.ColorDefault, color)
+}
+
 // Print a message in white text.
 func printString(x, y int, message string) {
 	for i, ch := range message {
@@ -409,17 +465,6 @@ func printBorderCharacter(x, y int, ch rune) {
 	termbox.SetCell(x, y, ch, termbox.ColorBlue, termbox.ColorDefault)
 }
 
-var (
-	headerHeight       = 5
-	previewHeight      = 6
-	sidebarWidth       = 20
-	instructionsHeight = 10
-
-	// The internal cells (the board cells) are treated as pairs, so to keep them on even x coordinates we'll
-	// put an empty column on the left side.
-	totalHeight = headerHeight + height + instructionsHeight + 2
-	totalWidth  = (width * 2) + sidebarWidth + 1
-)
 
 /*
 
@@ -525,8 +570,7 @@ func (game *Game) Draw(fullRedraw bool) {
 	for x := 0; x < width; x++ {
 		for y := 0; y < height; y++ {
 			color := game.board.CellColor(Vector{x, y})
-			termbox.SetCell(x*2+2, headerHeight+y+2, ' ', termbox.ColorDefault, color)
-			termbox.SetCell(x*2+3, headerHeight+y+2, ' ', termbox.ColorDefault, color)
+			SetBoardCell(x, y, color)
 		}
 	}
 
