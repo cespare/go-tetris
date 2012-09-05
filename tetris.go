@@ -164,6 +164,7 @@ func (game *Game) Start() {
 			eventQueue <- waitForUserEvent()
 		}
 	}()
+gameOver:
 	for {
 		fullRedraw := false
 		var event GameEvent
@@ -189,9 +190,12 @@ func (game *Game) Start() {
 			fullRedraw = true
 		}
 		if game.over {
-			return
+			break gameOver
 		}
 		game.Draw(fullRedraw)
+	}
+	game.DrawGameOver()
+	for waitForUserEvent() != Quit {
 	}
 }
 
@@ -405,6 +409,18 @@ func printBorderCharacter(x, y int, ch rune) {
 	termbox.SetCell(x, y, ch, termbox.ColorBlue, termbox.ColorDefault)
 }
 
+var (
+	headerHeight       = 5
+	previewHeight      = 6
+	sidebarWidth       = 20
+	instructionsHeight = 10
+
+	// The internal cells (the board cells) are treated as pairs, so to keep them on even x coordinates we'll
+	// put an empty column on the left side.
+	totalHeight = headerHeight + height + instructionsHeight + 2
+	totalWidth  = (width * 2) + sidebarWidth + 1
+)
+
 /*
 
   +---------------------------------------+
@@ -428,17 +444,6 @@ func printBorderCharacter(x, y int, ch rune) {
 
 */
 func (game *Game) Draw(fullRedraw bool) {
-
-	headerHeight := 5
-	previewHeight := 6
-	/*scoreHeight := height - previewHeight - 1*/
-	sidebarWidth := 20
-	instructionsHeight := 10
-
-	// The internal cells (the board cells) are treated as pairs, so to keep them on even x coordinates we'll
-	// put an empty column on the left side.
-	totalHeight := headerHeight + height + instructionsHeight + 2
-	totalWidth := (width * 2) + sidebarWidth + 1
 
 	// We don't need to redraw the static stuff termbox's buffer every time we move a piece.
 	// See http://en.wikipedia.org/wiki/Box-drawing_character for unicode characters.
@@ -566,6 +571,18 @@ func (game *Game) Draw(fullRedraw bool) {
 	}
 
 	// Flush termbox's internal state to the screen.
+	termbox.Flush()
+}
+
+func (game *Game) DrawGameOver() {
+	for y := (totalHeight/2 - 1); y <= (totalHeight/2)+1; y++ {
+		for x := 1; x < totalWidth+3; x++ {
+			termbox.SetCell(x, y, ' ', termbox.ColorDefault, termbox.ColorBlue)
+		}
+	}
+	for i, ch := range "GAME OVER" {
+		termbox.SetCell(totalWidth/2-4+i, totalHeight/2, ch, termbox.ColorWhite, termbox.ColorBlue)
+	}
 	termbox.Flush()
 }
 
