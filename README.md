@@ -11,11 +11,11 @@ A simple terminal tetris implementation in Go.
 * Collision detection
 * Anchoring/switching to the next piece
 * Quick drop
+* Line clearing
 
 ## To implement
 
 * Rotation
-* Line clearing
 * Piece colors
 * Speeding up
 * Scoring

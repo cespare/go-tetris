@@ -75,6 +75,14 @@ func (ps VectorSet) contains(p Vector) bool {
 	return ok
 }
 
+func (ps VectorSet) add(p Vector) {
+	ps[p] = None
+}
+
+func (ps VectorSet) delete(p Vector) {
+	delete(ps, p)
+}
+
 type Direction int
 
 const (
@@ -127,7 +135,7 @@ func loadPieces() (pieces []Piece, err error) {
 			waiting = false
 			for _, char := range line {
 				if char != ' ' {
-					blocks[Vector{x, y}] = None
+					blocks.add(Vector{x, y})
 				}
 				x++
 			}
@@ -144,7 +152,7 @@ func loadPieces() (pieces []Piece, err error) {
 func NewPiece(points []Vector) Piece {
 	pointSet := make(VectorSet)
 	for _, point := range points {
-		pointSet[point] = None
+		pointSet.add(point)
 	}
 	return Piece{pointSet}
 }
@@ -160,12 +168,16 @@ func NewGame() *Game {
 	game.over = false
 	// Start off the delay at 3/4 of a second.
 	game.dropDelayMillis = 750
-	game.setupGameTicker()
+	game.startTicker()
 	return game
 }
 
-func (game *Game) setupGameTicker() {
+func (game *Game) startTicker() {
 	game.ticker = time.NewTicker(time.Duration(game.dropDelayMillis) * time.Millisecond)
+}
+
+func (game *Game) stopTicker() {
+	game.ticker.Stop()
 }
 
 type GameEvent int
@@ -276,24 +288,63 @@ func (board *Board) moveIfPossible(translation Vector) bool {
 
 func (board *Board) mergeCurrentPiece() {
 	for point, _ := range board.currentPiece.blocks {
-		board.cells[point.plus(board.currentPosition)] = None
+		board.cells.add(point.plus(board.currentPosition))
 	}
 }
 
-// Anchor the current piece to the board and generate a new piece. Returns whether the new piece overlaps with
-// existing pieces (indicating that the game is over).
-func (game *Game) anchor() bool {
+// Check whether a horizontal row is complete.
+func (board *Board) rowComplete(y int) bool {
+	for x := 0; x < width; x++ {
+		if !board.cells.contains(Vector{x, y}) {
+			return false
+		}
+	}
+	return true
+}
+
+// Clear a single row and move every above cell down.
+func (board *Board) collapseRow(rowY int) {
+	for y := rowY - 1; y >= 0; y-- {
+		for x := 0; x < width; x++ {
+			if board.cells.contains(Vector{x, y}) {
+				board.cells.add(Vector{x, y + 1})
+			} else {
+				board.cells.delete(Vector{x, y + 1})
+			}
+		}
+	}
+	// Clear the top row completely
+	for x := 0; x < width; x++ {
+		board.cells.delete(Vector{x, 0})
+	}
+}
+
+// Clear any complete rows and move the above blocks down.
+func (board *Board) clearRows() {
+	y := height - 1
+	for y >= 0 {
+		for board.rowComplete(y) {
+			board.collapseRow(y)
+		}
+		y -= 1
+	}
+}
+
+// Anchor the current piece to the board, clears lines, and generate a new piece. Sets the 'game over' state
+// if the new piece overlaps existing pieces.
+func (game *Game) anchor() {
 	game.board.mergeCurrentPiece()
+	game.board.clearRows()
+
 	game.board.currentPiece = game.nextPiece
 	game.board.currentPosition = Vector{initialX, 0}
 	game.nextPiece = game.GeneratePiece()
 
 	for point, _ := range game.board.currentPiece.blocks {
 		if game.board.cells.contains(point.plus(game.board.currentPosition)) {
-			return false
+			game.over = true
 		}
 	}
-	return true
 }
 
 // Attempt to move.
@@ -312,20 +363,16 @@ func (game *Game) Move(where Direction) {
 
 	// Perform anchoring if we tried to move down but we were unsuccessful.
 	if where == Down && !moved {
-		game.over = !game.anchor()
+		game.anchor()
 	}
 }
 
+// Drop the piece all the way and anchor it.
 func (game *Game) QuickDrop() {
-	moved := false
 	// Move down as far as possible
 	for game.board.moveIfPossible(Vector{0, 1}) {
-		moved = true
 	}
-	// If it wasn't possible to move down at all, anchor the piece.
-	if !moved {
-		game.over = !game.anchor()
-	}
+	game.anchor()
 }
 
 func (game *Game) Rotate() {
