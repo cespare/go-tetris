@@ -4,16 +4,17 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"github.com/nsf/termbox-go"
 	"io"
+	"math/rand"
 	"os"
 	"strings"
-	"math/rand"
 	"time"
 )
 
 const (
 	width      = 10
-	height     = 10
+	height     = 15
 	piecesFile = "./pieces.txt"
 )
 
@@ -46,10 +47,6 @@ func readLines(path string) (lines []string, err error) {
 	return
 }
 
-type Direction int
-
-var None struct{} = struct{}{}
-
 type Vector struct {
 	x, y int
 }
@@ -61,7 +58,12 @@ func (first Vector) minus(second Vector) Vector {
 	return Vector{first.x - second.x, first.y - second.y}
 }
 
+// A VectorSet is a Set of Vectors -- the values of the map have the type struct{} so as to not use any space.
 type VectorSet map[Vector]struct{}
+
+// None is the element used as a value in a VectorSet to indicate the vector's (key's) presence in the set. It
+// is an empty placeholder.
+var None struct{} = struct{}{}
 
 type Piece struct {
 	blocks VectorSet
@@ -72,11 +74,13 @@ func (ps VectorSet) contains(p Vector) bool {
 	return ok
 }
 
+type Direction int
+
 const (
-	up Direction = iota + 1
-	down
-	left
-	right
+	Up Direction = iota + 1
+	Down
+	Left
+	Right
 )
 
 type Board struct {
@@ -97,6 +101,8 @@ type Game struct {
 	pieces    []Piece
 }
 
+// Load in the visual representations of pieces from the file containing the piece shapes and emit an array of
+// all possible pieces.
 func loadPieces() (pieces []Piece, err error) {
 	lines, err := readLines(piecesFile)
 	waiting := true
@@ -151,7 +157,25 @@ func NewGame() *Game {
 
 func (game *Game) Start() {
 	game.board.Draw()
+gameLoop:
 	for {
+		switch event := termbox.PollEvent(); event.Type {
+		case termbox.EventKey:
+			switch event.Key {
+			case termbox.KeyCtrlC:
+				break gameLoop
+			case termbox.KeyArrowLeft:
+				game.board.Move(Left)
+			case termbox.KeyArrowUp:
+				game.board.Rotate()
+			case termbox.KeyArrowRight:
+				game.board.Move(Right)
+			case termbox.KeyArrowDown:
+				game.board.Move(Down)
+			}
+		case termbox.EventError:
+			panic(event.Err)
+		}
 		game.board.Draw()
 	}
 }
@@ -160,23 +184,34 @@ func (game *Game) GeneratePiece() *Piece {
 	return &game.pieces[rand.Intn(len(game.pieces))]
 }
 
-func (board *Board) Move(where Direction) bool {
-	translation := Vector{0, 0}
-	switch where {
-	case up:
-		translation = Vector{0, -1}
-	case down:
-		translation = Vector{0, 1}
-	case left:
-		translation = Vector{-1, 0}
-	case right:
-		translation = Vector{1, 0}
+func (board *Board) moveIfPossible(translation Vector) bool {
+	attemptedPosition := board.currentPosition.plus(translation)
+	for point, _ := range board.currentPiece.blocks {
+		attemptedPoint := point.plus(attemptedPosition)
+		if attemptedPoint.x < 0 || attemptedPoint.x >= width ||
+			attemptedPoint.y < 0 || attemptedPoint.y >= height ||
+			board.cells.contains(attemptedPoint) {
+			return false
+		}
 	}
-	board.currentPosition = board.currentPosition.plus(translation)
+	board.currentPosition = attemptedPosition
 	return true
 }
 
-func (board *Board) Rotate(Direction) bool {
+func (board *Board) Move(where Direction) bool {
+	translation := Vector{0, 0}
+	switch where {
+	case Down:
+		translation = Vector{0, 1}
+	case Left:
+		translation = Vector{-1, 0}
+	case Right:
+		translation = Vector{1, 0}
+	}
+	return board.moveIfPossible(translation)
+}
+
+func (board *Board) Rotate() bool {
 	return true
 }
 
@@ -195,23 +230,48 @@ func (board *Board) Filled(position Vector) bool {
 }
 
 func (board *Board) Draw() {
-	fmt.Println("+" + strings.Repeat("-", width) + "+")
-	for y := 0; y < height; y++ {
-		fmt.Printf("|")
-		for x := 0; x < height; x++ {
-			if board.Filled(Vector{x, y}) {
-				fmt.Printf("#")
-			} else {
-				fmt.Printf(" ")
+	termbox.Clear(termbox.ColorDefault, termbox.ColorDefault)
+
+	// Print the borders. The internal cells (the board cells) are treated as pairs, so to keep them on even x
+	// coordinates we'll put an empty column on the left side.
+	termbox.SetCell(1, 0, 0x256D, termbox.ColorBlue, termbox.ColorDefault)
+	termbox.SetCell(width*2+2, 0, 0x256E, termbox.ColorBlue, termbox.ColorDefault)
+	termbox.SetCell(1, height+1, 0x2570, termbox.ColorBlue, termbox.ColorDefault)
+	termbox.SetCell(width*2+2, height+1, 0x256F, termbox.ColorBlue, termbox.ColorDefault)
+	for x := 2; x <= width*2+1; x++ {
+		termbox.SetCell(x, 0, 0x2500, termbox.ColorBlue, termbox.ColorDefault)
+		termbox.SetCell(x, height+1, 0x2500, termbox.ColorBlue, termbox.ColorDefault)
+	}
+	for y := 1; y <= height; y++ {
+		termbox.SetCell(1, y, 0x2502, termbox.ColorBlue, termbox.ColorDefault)
+		termbox.SetCell(width*2+2, y, 0x2502, termbox.ColorBlue, termbox.ColorDefault)
+	}
+
+	// Print the board contents. Each block will correspond to a side-by-side pair of cells in the termbox, so
+	// that the visible blocks will be roughly square.
+	for x := 1; x <= width; x++ {
+		for y := 1; y <= height; y++ {
+			if board.Filled(Vector{x - 1, y - 1}) {
+				termbox.SetCell(x*2, y, ' ', termbox.ColorDefault, termbox.ColorGreen)
+				termbox.SetCell(x*2+1, y, ' ', termbox.ColorDefault, termbox.ColorGreen)
 			}
 		}
-		fmt.Println("|")
 	}
-	fmt.Println("+" + strings.Repeat("-", width) + "+")
+
+	termbox.Flush()
 }
 
 func main() {
 	rand.Seed(time.Now().UnixNano())
+
+	err := termbox.Init()
+	if err != nil {
+		panic(err)
+	}
+
 	game := NewGame()
 	game.Start()
+
+	termbox.Close()
+	fmt.Println("Bye!")
 }
