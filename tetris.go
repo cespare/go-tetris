@@ -164,7 +164,6 @@ func (game *Game) Start() {
 			eventQueue <- waitForUserEvent()
 		}
 	}()
-gameLoop:
 	for {
 		fullRedraw := false
 		var event GameEvent
@@ -185,12 +184,12 @@ gameLoop:
 		case Rotate:
 			game.Rotate()
 		case Quit:
-			break gameLoop
+			return
 		case Redraw:
 			fullRedraw = true
 		}
 		if game.over {
-			break gameLoop
+			return
 		}
 		game.Draw(fullRedraw)
 	}
