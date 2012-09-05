@@ -27,10 +27,10 @@ A simple terminal tetris implementation in Go.
 * Scoring
 * Game Over
 * Line clearing animations
+* Speeding up
 
 ## To implement
 
-* Speeding up
 * Pausing
 * Music + sound effects
 * 'Ghost' piece showing where your piece will land

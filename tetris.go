@@ -53,30 +53,30 @@ func (p *Piece) unrotate() {
 func TetrisPieces() []Piece {
 	return []Piece{Piece{[]PieceInstance{[]Vector{Vector{0, 0}, Vector{1, 0}, Vector{0, 1}, Vector{1, 1}}},
 		0, termbox.ColorYellow},
-		Piece{[]PieceInstance{[]Vector{Vector{0, 0}, Vector{1, 0}, Vector{1, 1}, Vector{2, 1}},
-			[]Vector{Vector{1, 0}, Vector{0, 1}, Vector{1, 1}, Vector{0, 2}},
-		}, 0, termbox.ColorRed},
-		Piece{[]PieceInstance{[]Vector{Vector{1, 0}, Vector{2, 0}, Vector{0, 1}, Vector{1, 1}},
-			[]Vector{Vector{0, 0}, Vector{0, 1}, Vector{1, 1}, Vector{1, 2}},
-		}, 0, termbox.ColorGreen},
-		Piece{[]PieceInstance{[]Vector{Vector{1, 0}, Vector{0, 1}, Vector{1, 1}, Vector{2, 1}},
-			[]Vector{Vector{0, 0}, Vector{0, 1}, Vector{1, 1}, Vector{0, 2}},
-			[]Vector{Vector{0, 0}, Vector{1, 0}, Vector{2, 0}, Vector{1, 1}},
-			[]Vector{Vector{1, 0}, Vector{0, 1}, Vector{1, 1}, Vector{1, 2}},
-		}, 0, termbox.ColorMagenta},
-		Piece{[]PieceInstance{[]Vector{Vector{1, 0}, Vector{1, 1}, Vector{1, 2}, Vector{2, 2}},
-			[]Vector{Vector{0, 1}, Vector{1, 1}, Vector{2, 1}, Vector{0, 2}},
-			[]Vector{Vector{0, 0}, Vector{1, 0}, Vector{1, 1}, Vector{1, 2}},
-			[]Vector{Vector{2, 0}, Vector{0, 1}, Vector{1, 1}, Vector{2, 1}},
-		}, 0, termbox.ColorWhite},
-		Piece{[]PieceInstance{[]Vector{Vector{1, 0}, Vector{1, 1}, Vector{1, 2}, Vector{0, 2}},
-			[]Vector{Vector{0, 1}, Vector{1, 1}, Vector{2, 1}, Vector{0, 0}},
-			[]Vector{Vector{1, 0}, Vector{2, 0}, Vector{1, 1}, Vector{1, 2}},
-			[]Vector{Vector{0, 1}, Vector{1, 1}, Vector{2, 1}, Vector{2, 2}},
-		}, 0, termbox.ColorBlue},
-		Piece{[]PieceInstance{[]Vector{Vector{1, 0}, Vector{1, 1}, Vector{1, 2}, Vector{1, 3}},
-			[]Vector{Vector{0, 1}, Vector{1, 1}, Vector{2, 1}, Vector{3, 1}},
-		}, 0, termbox.ColorCyan},
+		/*Piece{[]PieceInstance{[]Vector{Vector{0, 0}, Vector{1, 0}, Vector{1, 1}, Vector{2, 1}},*/
+			/*[]Vector{Vector{1, 0}, Vector{0, 1}, Vector{1, 1}, Vector{0, 2}},*/
+		/*}, 0, termbox.ColorRed},*/
+		/*Piece{[]PieceInstance{[]Vector{Vector{1, 0}, Vector{2, 0}, Vector{0, 1}, Vector{1, 1}},*/
+			/*[]Vector{Vector{0, 0}, Vector{0, 1}, Vector{1, 1}, Vector{1, 2}},*/
+		/*}, 0, termbox.ColorGreen},*/
+		/*Piece{[]PieceInstance{[]Vector{Vector{1, 0}, Vector{0, 1}, Vector{1, 1}, Vector{2, 1}},*/
+			/*[]Vector{Vector{0, 0}, Vector{0, 1}, Vector{1, 1}, Vector{0, 2}},*/
+			/*[]Vector{Vector{0, 0}, Vector{1, 0}, Vector{2, 0}, Vector{1, 1}},*/
+			/*[]Vector{Vector{1, 0}, Vector{0, 1}, Vector{1, 1}, Vector{1, 2}},*/
+		/*}, 0, termbox.ColorMagenta},*/
+		/*Piece{[]PieceInstance{[]Vector{Vector{1, 0}, Vector{1, 1}, Vector{1, 2}, Vector{2, 2}},*/
+			/*[]Vector{Vector{0, 1}, Vector{1, 1}, Vector{2, 1}, Vector{0, 2}},*/
+			/*[]Vector{Vector{0, 0}, Vector{1, 0}, Vector{1, 1}, Vector{1, 2}},*/
+			/*[]Vector{Vector{2, 0}, Vector{0, 1}, Vector{1, 1}, Vector{2, 1}},*/
+		/*}, 0, termbox.ColorWhite},*/
+		/*Piece{[]PieceInstance{[]Vector{Vector{1, 0}, Vector{1, 1}, Vector{1, 2}, Vector{0, 2}},*/
+			/*[]Vector{Vector{0, 1}, Vector{1, 1}, Vector{2, 1}, Vector{0, 0}},*/
+			/*[]Vector{Vector{1, 0}, Vector{2, 0}, Vector{1, 1}, Vector{1, 2}},*/
+			/*[]Vector{Vector{0, 1}, Vector{1, 1}, Vector{2, 1}, Vector{2, 2}},*/
+		/*}, 0, termbox.ColorBlue},*/
+		/*Piece{[]PieceInstance{[]Vector{Vector{1, 0}, Vector{1, 1}, Vector{1, 2}, Vector{1, 3}},*/
+			/*[]Vector{Vector{0, 1}, Vector{1, 1}, Vector{2, 1}, Vector{3, 1}},*/
+		/*}, 0, termbox.ColorCyan},*/
 	}
 }
 
@@ -128,13 +128,17 @@ func NewGame() *Game {
 	game.nextPiece = game.GeneratePiece()
 	game.over = false
 	game.score = 0
-	// Start off the delay at 3/4 of a second.
-	game.dropDelayMillis = 750
 	game.startTicker()
 	return game
 }
 
+
 func (game *Game) startTicker() {
+	// Set the speed as a function of score. Starts at 800ms, decreases to 200ms by 100ms each 500 points.
+	game.dropDelayMillis = 800 - game.score / 5
+	if game.dropDelayMillis < 200 {
+		game.dropDelayMillis = 200
+	}
 	game.ticker = time.NewTicker(time.Duration(game.dropDelayMillis) * time.Millisecond)
 }
 
@@ -339,7 +343,7 @@ func (game *Game) anchor() {
 
 	if len(rowsCleared) > 0 {
 		// Animate the cleared rows disappearing
-		game.ticker.Stop()
+		game.stopTicker()
 		flickerCells := make(map[Vector]termbox.Attribute)
 		for _, y := range rowsCleared {
 			for x := 0; x < width; x++ {
@@ -364,6 +368,8 @@ func (game *Game) anchor() {
 		// Scoring -- 1 row -> 100, 2 rows -> 200, ... 4 rows -> 800
 		points := 100 * math.Pow(2, float64(len(rowsCleared)-1))
 		game.score += int(points)
+
+		game.startTicker()
 	}
 
 	// Bring in the next piece.
