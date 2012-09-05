@@ -15,6 +15,7 @@ import (
 const (
 	width      = 10
 	height     = 15
+	initialX   = 4
 	piecesFile = "./pieces.txt"
 )
 
@@ -151,6 +152,7 @@ func NewGame() *Game {
 	game.pieces = pieces
 	game.board = NewBoard()
 	game.board.currentPiece = game.GeneratePiece()
+	game.board.currentPosition = Vector{initialX, 0}
 	game.nextPiece = game.GeneratePiece()
 	return game
 }
@@ -159,22 +161,43 @@ func (game *Game) Start() {
 	game.board.Draw()
 gameLoop:
 	for {
+		gameOver := false
 		switch event := termbox.PollEvent(); event.Type {
+		// Movement: arrow keys or vim controls (h, j, k, l)
+		// Exit: 'q' or ctrl-c.
 		case termbox.EventKey:
-			switch event.Key {
-			case termbox.KeyCtrlC:
-				break gameLoop
-			case termbox.KeyArrowLeft:
-				game.board.Move(Left)
-			case termbox.KeyArrowUp:
-				game.board.Rotate()
-			case termbox.KeyArrowRight:
-				game.board.Move(Right)
-			case termbox.KeyArrowDown:
-				game.board.Move(Down)
+			if event.Ch == 0 { // A special key combo was pressed
+				switch event.Key {
+				case termbox.KeyCtrlC:
+					break gameLoop
+				case termbox.KeyArrowLeft:
+					gameOver = game.Move(Left)
+				case termbox.KeyArrowUp:
+					game.Rotate()
+				case termbox.KeyArrowRight:
+					gameOver = game.Move(Right)
+				case termbox.KeyArrowDown:
+					gameOver = game.Move(Down)
+				}
+			} else {
+				switch event.Ch {
+				case 'q':
+					break gameLoop
+				case 'h':
+					gameOver = game.Move(Left)
+				case 'k':
+					game.Rotate()
+				case 'l':
+					gameOver = game.Move(Right)
+				case 'j':
+					gameOver = game.Move(Down)
+				}
 			}
 		case termbox.EventError:
 			panic(event.Err)
+		}
+		if gameOver {
+			break gameLoop
 		}
 		game.board.Draw()
 	}
@@ -198,7 +221,30 @@ func (board *Board) moveIfPossible(translation Vector) bool {
 	return true
 }
 
-func (board *Board) Move(where Direction) bool {
+func (board *Board) mergeCurrentPiece() {
+	for point, _ := range board.currentPiece.blocks {
+		board.cells[point.plus(board.currentPosition)] = None
+	}
+}
+
+// Anchor the current piece to the board and generate a new piece. Returns whether the new piece overlaps with
+// existing pieces (indicating that the game is over).
+func (game *Game) anchor() bool {
+	game.board.mergeCurrentPiece()
+	game.board.currentPiece = game.nextPiece
+	game.board.currentPosition = Vector{initialX, 0}
+	game.nextPiece = game.GeneratePiece()
+
+	for point, _ := range game.board.currentPiece.blocks {
+		if game.board.cells.contains(point.plus(game.board.currentPosition)) {
+			return false
+		}
+	}
+	return true
+}
+
+// Attempt to move. Returns whether the game ends as a result.
+func (game *Game) Move(where Direction) bool {
 	translation := Vector{0, 0}
 	switch where {
 	case Down:
@@ -208,15 +254,19 @@ func (board *Board) Move(where Direction) bool {
 	case Right:
 		translation = Vector{1, 0}
 	}
-	return board.moveIfPossible(translation)
+	// Attempt to make the move.
+	moved := game.board.moveIfPossible(translation)
+
+	gameOver := false
+	// Perform anchoring if we tried to move down but we were unsuccessful.
+	if where == Down && !moved {
+		gameOver = !game.anchor()
+	}
+	return gameOver
 }
 
-func (board *Board) Rotate() bool {
+func (game *Game) Rotate() bool {
 	return true
-}
-
-func (board *Board) MergeCurrentPiece() {
-	return
 }
 
 func (board *Board) Filled(position Vector) bool {
