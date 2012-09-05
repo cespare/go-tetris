@@ -31,6 +31,7 @@ type PieceInstance []Vector
 type Piece struct {
 	rotations       []PieceInstance
 	currentRotation int
+	color           termbox.Attribute
 }
 
 func (p *Piece) instance() PieceInstance {
@@ -49,52 +50,41 @@ func (p *Piece) unrotate() {
 }
 
 func TetrisPieces() []Piece {
-	return []Piece{Piece{[]PieceInstance{[]Vector{Vector{0, 0}, Vector{1, 0}, Vector{0, 1}, Vector{1, 1}}}, 0},
+	return []Piece{Piece{[]PieceInstance{[]Vector{Vector{0, 0}, Vector{1, 0}, Vector{0, 1}, Vector{1, 1}}},
+		0, termbox.ColorYellow},
 		Piece{[]PieceInstance{[]Vector{Vector{0, 0}, Vector{1, 0}, Vector{1, 1}, Vector{2, 1}},
 			[]Vector{Vector{1, 0}, Vector{0, 1}, Vector{1, 1}, Vector{0, 2}},
-		}, 0},
+		}, 0, termbox.ColorRed},
 		Piece{[]PieceInstance{[]Vector{Vector{1, 0}, Vector{2, 0}, Vector{0, 1}, Vector{1, 1}},
 			[]Vector{Vector{0, 0}, Vector{0, 1}, Vector{1, 1}, Vector{1, 2}},
-		}, 0},
+		}, 0, termbox.ColorGreen},
 		Piece{[]PieceInstance{[]Vector{Vector{1, 0}, Vector{0, 1}, Vector{1, 1}, Vector{2, 1}},
 			[]Vector{Vector{0, 0}, Vector{0, 1}, Vector{1, 1}, Vector{0, 2}},
 			[]Vector{Vector{0, 0}, Vector{1, 0}, Vector{2, 0}, Vector{1, 1}},
 			[]Vector{Vector{1, 0}, Vector{0, 1}, Vector{1, 1}, Vector{1, 2}},
-		}, 0},
+		}, 0, termbox.ColorMagenta},
 		Piece{[]PieceInstance{[]Vector{Vector{1, 0}, Vector{1, 1}, Vector{1, 2}, Vector{2, 2}},
 			[]Vector{Vector{0, 1}, Vector{1, 1}, Vector{2, 1}, Vector{0, 2}},
 			[]Vector{Vector{0, 0}, Vector{1, 0}, Vector{1, 1}, Vector{1, 2}},
 			[]Vector{Vector{2, 0}, Vector{0, 1}, Vector{1, 1}, Vector{2, 1}},
-		}, 0},
+		}, 0, termbox.ColorWhite},
 		Piece{[]PieceInstance{[]Vector{Vector{1, 0}, Vector{1, 1}, Vector{1, 2}, Vector{0, 2}},
 			[]Vector{Vector{0, 1}, Vector{1, 1}, Vector{2, 1}, Vector{0, 0}},
 			[]Vector{Vector{1, 0}, Vector{2, 0}, Vector{1, 1}, Vector{1, 2}},
 			[]Vector{Vector{0, 1}, Vector{1, 1}, Vector{2, 1}, Vector{2, 2}},
-		}, 0},
+		}, 0, termbox.ColorBlue},
 		Piece{[]PieceInstance{[]Vector{Vector{1, 0}, Vector{1, 1}, Vector{1, 2}, Vector{1, 3}},
 			[]Vector{Vector{0, 1}, Vector{1, 1}, Vector{2, 1}, Vector{3, 1}},
-		}, 0},
+		}, 0, termbox.ColorCyan},
 	}
 }
 
-// A VectorSet is a Set of Vectors -- the values of the map have the type struct{} so as to not use any space.
-type VectorSet map[Vector]struct{}
+// A map from a point on a board to the color of that cell.
+type ColorMap map[Vector]termbox.Attribute
 
-// None is the element used as a value in a VectorSet to indicate the vector's (key's) presence in the set. It
-// is an empty placeholder.
-var None struct{} = struct{}{}
-
-func (ps VectorSet) contains(p Vector) bool {
-	_, ok := ps[p]
+func (cm ColorMap) contains(v Vector) bool {
+	_, ok := cm[v]
 	return ok
-}
-
-func (ps VectorSet) add(p Vector) {
-	ps[p] = None
-}
-
-func (ps VectorSet) delete(p Vector) {
-	delete(ps, p)
 }
 
 type Direction int
@@ -107,14 +97,14 @@ const (
 )
 
 type Board struct {
-	cells           VectorSet
+	cells           ColorMap
 	currentPiece    *Piece
 	currentPosition Vector
 }
 
 func NewBoard() *Board {
 	board := new(Board)
-	board.cells = make(VectorSet)
+	board.cells = make(ColorMap)
 	return board
 }
 
@@ -265,7 +255,7 @@ func (board *Board) moveIfPossible(translation Vector) bool {
 
 func (board *Board) mergeCurrentPiece() {
 	for _, point := range board.currentPiece.instance() {
-		board.cells.add(point.plus(board.currentPosition))
+		board.cells[point.plus(board.currentPosition)] = board.currentPiece.color
 	}
 }
 
@@ -283,16 +273,16 @@ func (board *Board) rowComplete(y int) bool {
 func (board *Board) collapseRow(rowY int) {
 	for y := rowY - 1; y >= 0; y-- {
 		for x := 0; x < width; x++ {
-			if board.cells.contains(Vector{x, y}) {
-				board.cells.add(Vector{x, y + 1})
+			if color, ok := board.cells[Vector{x, y}]; ok {
+				board.cells[Vector{x, y + 1}] = color
 			} else {
-				board.cells.delete(Vector{x, y + 1})
+				delete(board.cells, Vector{x, y + 1})
 			}
 		}
 	}
 	// Clear the top row completely
 	for x := 0; x < width; x++ {
-		board.cells.delete(Vector{x, 0})
+		delete(board.cells, Vector{x, 0})
 	}
 }
 
@@ -357,19 +347,19 @@ func (game *Game) Rotate() {
 	}
 }
 
-func (board *Board) Filled(position Vector) bool {
-	if board.cells.contains(position) {
-		return true
+func (board *Board) CellColor(position Vector) termbox.Attribute {
+	if color, ok := board.cells[position]; ok {
+		return color
 	}
 	if board.currentPiece == nil {
-		return false
+		return termbox.ColorDefault
 	}
 	for _, point := range board.currentPiece.instance() {
 		if point.plus(board.currentPosition).equals(position) {
-			return true
+			return board.currentPiece.color
 		}
 	}
-	return false
+	return termbox.ColorDefault
 }
 
 func (board *Board) Draw() {
@@ -394,10 +384,9 @@ func (board *Board) Draw() {
 	// that the visible blocks will be roughly square.
 	for x := 1; x <= width; x++ {
 		for y := 1; y <= height; y++ {
-			if board.Filled(Vector{x - 1, y - 1}) {
-				termbox.SetCell(x*2, y, ' ', termbox.ColorDefault, termbox.ColorGreen)
-				termbox.SetCell(x*2+1, y, ' ', termbox.ColorDefault, termbox.ColorGreen)
-			}
+			color := board.CellColor(Vector{x - 1, y - 1})
+			termbox.SetCell(x*2, y, ' ', termbox.ColorDefault, color)
+			termbox.SetCell(x*2+1, y, ' ', termbox.ColorDefault, color)
 		}
 	}
 
