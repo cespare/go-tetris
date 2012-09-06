@@ -1,11 +1,11 @@
 package main
 
 import (
+	"fmt"
 	"github.com/cespare/go-tetris/tetris"
 	"github.com/nsf/termbox-go"
 	"math/rand"
 	"time"
-	"fmt"
 )
 
 func main() {

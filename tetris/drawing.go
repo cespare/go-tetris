@@ -4,66 +4,8 @@ import (
 	"github.com/nsf/termbox-go"
 )
 
-var (
-	headerHeight       = 5
-	previewHeight      = 6
-	sidebarWidth       = 20
-	instructionsHeight = 10
-
-	// The internal cells (the board cells) are treated as pairs, so to keep them on even x coordinates we'll
-	// put an empty column on the left side.
-	totalHeight = headerHeight + height + instructionsHeight + 2
-	totalWidth  = (width * 2) + sidebarWidth + 1
-)
-
-// A board cell is two terminal cells wide, for squaritude. Only need to set the whole bg color (for filling
-// in a cell).
-func setBoardCell(x, y int, color termbox.Attribute) {
-	termbox.SetCell(x*2+2, headerHeight+y+2, ' ', termbox.ColorDefault, color)
-	termbox.SetCell(x*2+3, headerHeight+y+2, ' ', termbox.ColorDefault, color)
-}
-
-// Print a message in white text.
-func printString(x, y int, message string) {
-	for i, ch := range message {
-		termbox.SetCell(x+i, y, ch, termbox.ColorWhite, termbox.ColorDefault)
-	}
-}
-
-// Print a message vertically in white text.
-func printStringVertical(x, y int, message string) {
-	for i, ch := range message {
-		termbox.SetCell(x, y+i, ch, termbox.ColorWhite, termbox.ColorDefault)
-	}
-}
-
-// Print a box-drawing border character.
-func printBorderCharacter(x, y int, ch rune) {
-	termbox.SetCell(x, y, ch, termbox.ColorBlue, termbox.ColorDefault)
-}
-
-// Print the current score in big ascii art digits
-var digitToAsciiArt = map[int][]string{0: []string{" __ ", "/  \\", "\\__/"},
-1: []string{"    ", " /| ", "  | "},
-2: []string{" __ ", "  _)", " /__"},
-3: []string{" __ ", "  _)", " __)"},
-4: []string{"    ", "|__|", "   |"},
-5: []string{"  __", " |_ ", " __)"},
-6: []string{" __ ", "/__ ", "\\__)"},
-7: []string{" ___", "   /", "  / "},
-8: []string{" __ ", "(__)", "(__)"},
-9: []string{" __ ", "(__\\", " __/"},
-	}
-
-func drawDigitAsAscii(x, y, digit int) {
-	for i, line := range digitToAsciiArt[digit] {
-		printString(x, y+i, line)
-	}
-}
-
 /*
-// See http://en.wikipedia.org/wiki/Box-drawing_character for unicode characters.
-
+This picture represents the game board and explains the dimension variables below.
 +---------------------------------------+
 |                 header                |
 +-----------------------+---------------+
@@ -82,9 +24,81 @@ func drawDigitAsAscii(x, y, digit int) {
 |             instructions              |
 |                                       |
 +---------------------------------------+
+*/
 
+var (
+	headerHeight       = 5
+	previewHeight      = 6
+	sidebarWidth       = 20
+	instructionsHeight = 10
+
+	// The internal cells (the board cells) are treated as pairs, so to keep them on even x coordinates we'll
+	// put an empty column on the left side.
+	totalHeight = headerHeight + height + instructionsHeight + 2
+	totalWidth  = (width * 2) + sidebarWidth + 1
+)
+
+// Our own wrapper around termbox.SetCell which knows the background color we're using.
+func setCell(x, y int, ch rune, fg termbox.Attribute) {
+	termbox.SetCell(x, y, ch, fg, backgroundColor)
+}
+
+// A board cell is two terminal cells wide, for squaritude. Only need to set the whole bg color (for filling
+// in a cell).
+func setBoardCell(x, y int, color termbox.Attribute) {
+	termbox.SetCell(x, y, ' ', termbox.ColorDefault, color)
+	termbox.SetCell(x+1, y, ' ', termbox.ColorDefault, color)
+}
+
+// Print a message in white text.
+func printString(x, y int, message string) {
+	for i, ch := range message {
+		setCell(x+i, y, ch, termbox.ColorWhite)
+	}
+}
+
+// Print a message vertically in white text.
+func printStringVertical(x, y int, message string) {
+	for i, ch := range message {
+		setCell(x, y+i, ch, termbox.ColorWhite)
+	}
+}
+
+// Print a box-drawing border character.
+func printBorderCharacter(x, y int, ch rune) {
+	setCell(x, y, ch, termbox.ColorBlue)
+}
+
+var digitToAsciiArt = map[int][]string{0: []string{" __ ", "/  \\", "\\__/"},
+	1: []string{"    ", " /| ", "  | "},
+	2: []string{" __ ", "  _)", " /__"},
+	3: []string{" __ ", "  _)", " __)"},
+	4: []string{"    ", "|__|", "   |"},
+	5: []string{"  __", " |_ ", " __)"},
+	6: []string{" __ ", "/__ ", "\\__)"},
+	7: []string{" ___", "   /", "  / "},
+	8: []string{" __ ", "(__)", "(__)"},
+	9: []string{" __ ", "(__\\", " __/"},
+}
+
+// Print the current score in big ascii art digits
+func drawDigitAsAscii(x, y, digit int) {
+	for i, line := range digitToAsciiArt[digit] {
+		printString(x, y+i, line)
+	}
+}
+
+/*
+// See http://en.wikipedia.org/wiki/Box-drawing_character for unicode characters.
 */
 func drawStaticBoardParts() {
+	// Make the whole board area the background color.
+	for x := 0; x < totalWidth+4; x++ {
+		for y := 0; y < totalHeight+2; y++ {
+			termbox.SetCell(x, y, ' ', termbox.ColorDefault, backgroundColor)
+		}
+	}
+
 	// Print the borders.
 	for x := 2; x < totalWidth+2; x++ {
 		printBorderCharacter(x, 0, '─')

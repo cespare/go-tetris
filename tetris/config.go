@@ -1,8 +1,17 @@
 package tetris
 
+import (
+	"github.com/nsf/termbox-go"
+)
+
 const (
-	width      = 10
-	height     = 18
-	initialX   = 4
-	piecesFile = "./pieces.txt"
+	// The width of the game board in game cells (each game cell is two terminal cells wide).
+	width = 10
+	// The height of the game board.
+	height = 18
+	// The initial x position of new blocks.
+	initialX = 4
+	// The background color of the game. It's necessary to set this to ensure that the colors work well with any
+	// terminal background color.
+	backgroundColor = termbox.ColorBlack
 )

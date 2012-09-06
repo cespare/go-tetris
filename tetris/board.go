@@ -7,22 +7,30 @@ import (
 // A map from a point on a board to the color of that cell.
 type ColorMap map[Vector]termbox.Attribute
 
-func (cm ColorMap) contains(v Vector) bool { _, ok := cm[v]
+// Returns whether a vector is a member of the color map.
+func (cm ColorMap) contains(v Vector) bool {
+	_, ok := cm[v]
 	return ok
 }
 
+// A Board represents the state of a tetris game board, including the current piece that is descending and the
+// blocks which already exist on the board.
 type Board struct {
 	cells           ColorMap
 	currentPiece    *Piece
 	currentPosition Vector
 }
 
+// Create a new empty tetris board with no current piece.
 func newBoard() *Board {
 	board := new(Board)
 	board.cells = make(ColorMap)
 	return board
 }
 
+// Finds whether the current piece is in collision (going over the edge, or overlapping existing occupied
+// blocks). This is useful for testing for collision when moving or rotating by speculatively making the move,
+// seeing if it collides, and moving back.
 func (board *Board) currentPieceInCollision() bool {
 	for _, point := range board.currentPiece.instance() {
 		attemptedPoint := point.plus(board.currentPosition)
@@ -35,6 +43,9 @@ func (board *Board) currentPieceInCollision() bool {
 	return false
 }
 
+// Moves the current piece to another location, if possible. The current piece is updated if this is
+// successful; otherwise, the piece is left unmoved. This method returns a boolean indicating whether the move
+// was successful.
 func (board *Board) moveIfPossible(translation Vector) bool {
 	position := board.currentPosition
 	board.currentPosition = board.currentPosition.plus(translation)
@@ -45,10 +56,12 @@ func (board *Board) moveIfPossible(translation Vector) bool {
 	return true
 }
 
+// Merge the blocks of the current piece into the game board and remove the current piece.
 func (board *Board) mergeCurrentPiece() {
 	for _, point := range board.currentPiece.instance() {
 		board.cells[point.plus(board.currentPosition)] = board.currentPiece.color
 	}
+	board.currentPiece = nil
 }
 
 // Check whether a horizontal row is complete.
@@ -102,17 +115,18 @@ func (board *Board) clearedRows() []int {
 	return cleared
 }
 
+// Finds the color of a particular board cell. It returns the background color if the cell is empty.
 func (board *Board) CellColor(position Vector) termbox.Attribute {
 	if color, ok := board.cells[position]; ok {
 		return color
 	}
 	if board.currentPiece == nil {
-		return termbox.ColorDefault
+		return backgroundColor
 	}
 	for _, point := range board.currentPiece.instance() {
 		if point.plus(board.currentPosition).equals(position) {
 			return board.currentPiece.color
 		}
 	}
-	return termbox.ColorDefault
+	return backgroundColor
 }

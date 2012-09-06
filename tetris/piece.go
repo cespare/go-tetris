@@ -7,20 +7,25 @@ import (
 // A particular rotational instance of a piece.
 type PieceInstance []Vector
 
+// A Tetris piece, including the all the possible rotations, a color, and an index indicating the current
+// rotation of the piece.
 type Piece struct {
 	rotations       []PieceInstance
 	currentRotation int
 	color           termbox.Attribute
 }
 
+// Find the current PieceInstance of this piece.
 func (p *Piece) instance() PieceInstance {
 	return p.rotations[p.currentRotation]
 }
 
+// Go to the next rotation.
 func (p *Piece) rotate() {
 	p.currentRotation = (p.currentRotation + 1) % len(p.rotations)
 }
 
+// Go to the previous rotation.
 func (p *Piece) unrotate() {
 	p.currentRotation = (p.currentRotation - 1) % len(p.rotations)
 	if p.currentRotation < 0 {
@@ -28,6 +33,18 @@ func (p *Piece) unrotate() {
 	}
 }
 
+// This has all the hard-coded tetris pieces.
+// TODO: It might be nice to have a way to parse these from a configuration file. Maybe the format could look
+// something like this:
+//
+// ##   #
+//	## ##
+//	   #
+//
+// ##
+// ##
+//
+// etc.
 func tetrisPieces() []Piece {
 	return []Piece{Piece{[]PieceInstance{[]Vector{Vector{0, 0}, Vector{1, 0}, Vector{0, 1}, Vector{1, 1}}},
 		0, termbox.ColorYellow},
