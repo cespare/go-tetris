@@ -28,7 +28,7 @@ func (p *Piece) unrotate() {
 	}
 }
 
-func TetrisPieces() []Piece {
+func tetrisPieces() []Piece {
 	return []Piece{Piece{[]PieceInstance{[]Vector{Vector{0, 0}, Vector{1, 0}, Vector{0, 1}, Vector{1, 1}}},
 		0, termbox.ColorYellow},
 		Piece{[]PieceInstance{[]Vector{Vector{0, 0}, Vector{1, 0}, Vector{1, 1}, Vector{2, 1}},

@@ -17,7 +17,7 @@ type Board struct {
 	currentPosition Vector
 }
 
-func NewBoard() *Board {
+func newBoard() *Board {
 	board := new(Board)
 	board.cells = make(ColorMap)
 	return board

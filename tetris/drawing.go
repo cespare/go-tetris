@@ -18,7 +18,7 @@ var (
 
 // A board cell is two terminal cells wide, for squaritude. Only need to set the whole bg color (for filling
 // in a cell).
-func SetBoardCell(x, y int, color termbox.Attribute) {
+func setBoardCell(x, y int, color termbox.Attribute) {
 	termbox.SetCell(x*2+2, headerHeight+y+2, ' ', termbox.ColorDefault, color)
 	termbox.SetCell(x*2+3, headerHeight+y+2, ' ', termbox.ColorDefault, color)
 }

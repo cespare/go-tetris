@@ -28,8 +28,8 @@ type Game struct {
 
 func NewGame() *Game {
 	game := new(Game)
-	game.pieces = TetrisPieces()
-	game.board = NewBoard()
+	game.pieces = tetrisPieces()
+	game.board = newBoard()
 	game.board.currentPiece = game.GeneratePiece()
 	game.board.currentPosition = Vector{initialX, 0}
 	game.nextPiece = game.GeneratePiece()
@@ -185,7 +185,7 @@ func (game *Game) anchor() {
 				if i % 2 == 0 {
 					color = termbox.ColorDefault
 				}
-				SetBoardCell(point.x, point.y, color)
+				setBoardCell(point.x, point.y, color)
 			}
 			termbox.Flush()
 			time.Sleep(80 * time.Millisecond)
@@ -260,7 +260,7 @@ func (game *Game) Draw(fullRedraw bool) {
 	for x := 0; x < width; x++ {
 		for y := 0; y < height; y++ {
 			color := game.board.CellColor(Vector{x, y})
-			SetBoardCell(x, y, color)
+			setBoardCell(x, y, color)
 		}
 	}
 

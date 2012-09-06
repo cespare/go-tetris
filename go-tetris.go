@@ -6,9 +6,6 @@ import (
 	"math/rand"
 	"time"
 	"fmt"
-	/*"github.com/nsf/termbox-go"*/
-	/*"math"*/
-	/*"math/rand"*/
 )
 
 func main() {
