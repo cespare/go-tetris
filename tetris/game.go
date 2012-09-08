@@ -24,6 +24,7 @@ type Game struct {
 	board           *Board
 	nextPiece       *Piece
 	pieces          []Piece
+	paused          bool
 	over            bool
 	dropDelayMillis int
 	ticker          *time.Ticker
@@ -38,6 +39,7 @@ func NewGame() *Game {
 	game.board.currentPiece = game.GeneratePiece()
 	game.board.currentPosition = Vector{initialX, 0}
 	game.nextPiece = game.GeneratePiece()
+	game.paused = false
 	game.over = false
 	game.score = 0
 	game.startTicker()
@@ -68,6 +70,7 @@ const (
 	MoveDown
 	Rotate
 	QuickDrop
+	Pause
 	Quit
 	// An event that doesn't cause a change to game state but causes a full redraw; e.g., a window resize.
 	Redraw
@@ -92,26 +95,39 @@ gameOver:
 		case <-game.ticker.C:
 			event = MoveDown
 		}
-		switch event {
-		case MoveLeft:
-			game.Move(Left)
-		case MoveRight:
-			game.Move(Right)
-		case MoveDown:
-			game.Move(Down)
-		case QuickDrop:
-			game.QuickDrop()
-		case Rotate:
-			game.Rotate()
-		case Quit:
-			return
-		case Redraw:
-			fullRedraw = true
+		if game.paused {
+			switch event {
+			case Pause:
+				game.Pause()
+			case Quit:
+				return
+			}
+		} else {
+			switch event {
+			case MoveLeft:
+				game.Move(Left)
+			case MoveRight:
+				game.Move(Right)
+			case MoveDown:
+				game.Move(Down)
+			case QuickDrop:
+				game.QuickDrop()
+			case Rotate:
+				game.Rotate()
+			case Pause:
+				game.Pause()
+			case Quit:
+				return
+			case Redraw:
+				fullRedraw = true
+			}
 		}
 		if game.over {
 			break gameOver
 		}
-		game.Draw(fullRedraw)
+		if !game.paused {
+			game.Draw(fullRedraw)
+		}
 	}
 	game.DrawGameOver()
 	for waitForUserEvent() != Quit {
@@ -128,6 +144,7 @@ func waitForTick(ticker *time.Ticker) GameEvent {
 func waitForUserEvent() GameEvent {
 	switch event := termbox.PollEvent(); event.Type {
 	// Movement: arrow keys or vim controls (h, j, k, l)
+	// Pause: 'p'
 	// Exit: 'q' or ctrl-c.
 	case termbox.EventKey:
 		if event.Ch == 0 { // A special key combo was pressed
@@ -147,6 +164,8 @@ func waitForUserEvent() GameEvent {
 			}
 		} else {
 			switch event.Ch {
+			case 'p':
+				return Pause
 			case 'q':
 				return Quit
 			case 'h':
@@ -302,6 +321,51 @@ func (game *Game) Draw(fullRedraw bool) {
 	}
 
 	// Flush termbox's internal state to the screen.
+	termbox.Flush()
+}
+
+// Pause or unpause the game, depending on game.paused
+func (game *Game) Pause() {
+	if game.paused {
+		game.paused = false
+		game.Draw(true)
+		game.startTicker()
+	} else {
+		game.stopTicker()
+		game.DrawPauseScreen()
+		game.paused = true
+	}
+}
+
+// Draw the pause screen, hiding the game board and next piece
+func (game *Game) DrawPauseScreen() {
+	// Clear the preview piece box.
+	previewPieceOffset := Vector{(width * 2) + 8, headerHeight + 3}
+	for x := 0; x < 6; x++ {
+		for y := 0; y < 4; y++ {
+			cursor := previewPieceOffset.plus(Vector{x, y})
+			setCell(cursor.x, cursor.y, ' ', termbox.ColorDefault)
+		}
+	}
+
+	// Clear the board 
+	for x := 0; x < width; x++ {
+		for y := 0; y < height; y++ {
+			setBoardCell((x*2)+2, headerHeight+y+2, backgroundColor)
+		}
+	}
+
+	// Draw PAUSED overlay
+	for y := (totalHeight/2 - 1); y <= (totalHeight/2)+1; y++ {
+		for x := 1; x < totalWidth+3; x++ {
+			termbox.SetCell(x, y, ' ', termbox.ColorDefault, termbox.ColorBlue)
+		}
+	}
+	for i, ch := range "PAUSED" {
+		termbox.SetCell(totalWidth/2-2+i, totalHeight/2, ch, termbox.ColorWhite, termbox.ColorBlue)
+	}
+
+	// Flush termbox to screen
 	termbox.Flush()
 }
 
