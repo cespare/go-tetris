@@ -247,6 +247,7 @@ func (game *Game) QuickDrop() {
 	// Move down as far as possible
 	for game.board.moveIfPossible(Vector{0, 1}) {
 	}
+	game.Draw(false)
 	game.anchor()
 }
 
