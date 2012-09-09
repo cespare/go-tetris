@@ -78,7 +78,9 @@ const (
 
 // Start running the game. It will continue indefinitely until the user exits.
 func (game *Game) Start() {
-	game.Draw(true)
+
+	drawStaticBoardParts()
+	game.DrawDynamic(false)
 
 	eventQueue := make(chan GameEvent, 100)
 	go func() {
@@ -88,19 +90,23 @@ func (game *Game) Start() {
 	}()
 gameOver:
 	for {
-		fullRedraw := false
 		var event GameEvent
 		select {
 		case event = <-eventQueue:
 		case <-game.ticker.C:
 			event = MoveDown
 		}
+		// If the game is paused, ignore all commands except for Pause, Quit, and Redraw. On Redraw, redraw
+		// the pause screen.
 		if game.paused {
 			switch event {
 			case Pause:
-				game.Pause()
+				game.PauseToggle()
 			case Quit:
 				return
+			case Redraw:
+				drawStaticBoardParts()
+				game.DrawPauseScreen()
 			}
 		} else {
 			switch event {
@@ -115,18 +121,19 @@ gameOver:
 			case Rotate:
 				game.Rotate()
 			case Pause:
-				game.Pause()
+				game.PauseToggle()
 			case Quit:
 				return
 			case Redraw:
-				fullRedraw = true
+				drawStaticBoardParts()
+			}
+			// Update screen only if game is not now paused.
+			if !game.paused {
+				game.DrawDynamic(false)
 			}
 		}
 		if game.over {
 			break gameOver
-		}
-		if !game.paused {
-			game.Draw(fullRedraw)
 		}
 	}
 	game.DrawGameOver()
@@ -277,25 +284,25 @@ func (game *Game) Rotate() {
 	}
 }
 
-// Draw the whole game interface. If fullRedraw is true, then this will redraw everything; otherwise, it just
-// updates the dynamic parts (the board, the score, and next piece preview).
-func (game *Game) Draw(fullRedraw bool) {
-
-	// We don't need to redraw the static stuff termbox's buffer every time we move a piece.
-	if fullRedraw {
-		drawStaticBoardParts()
-	}
+// Draw the dynamic parts of the game interface (the board, the next piece preview pane, and the score).  The
+// static parts should be drawn with the drawStaticBoardParts() function, if needed.  If clearOnly is true, 
+// the board and preview pane will be cleared rather than redrawn. 
+func (game *Game) DrawDynamic(clearOnly bool) {
 
 	// Print the board contents. Each block will correspond to a side-by-side pair of cells in the termbox, so
-	// that the visible blocks will be roughly square.
+	// that the visible blocks will be roughly square.  If clearOnly is true, draw background color.
 	for x := 0; x < width; x++ {
 		for y := 0; y < height; y++ {
-			color := game.board.CellColor(Vector{x, y})
-			setBoardCell((x*2)+2, headerHeight+y+2, color)
+			if clearOnly {
+				setBoardCell((x*2)+2, headerHeight+y+2, backgroundColor)
+			} else {
+				color := game.board.CellColor(Vector{x, y})
+				setBoardCell((x*2)+2, headerHeight+y+2, color)
+			}
 		}
 	}
 
-	// Print the preview piece. Need to clear the box first.
+	// Print the preview piece. Need to clear the box first.  Draw next piece only if clearOnly is false
 	previewPieceOffset := Vector{(width * 2) + 8, headerHeight + 3}
 	for x := 0; x < 6; x++ {
 		for y := 0; y < 4; y++ {
@@ -303,11 +310,14 @@ func (game *Game) Draw(fullRedraw bool) {
 			setCell(cursor.x, cursor.y, ' ', termbox.ColorDefault)
 		}
 	}
-	for _, point := range game.nextPiece.rotations[0] {
-		cursor := previewPieceOffset.plus(Vector{point.x * 2, point.y})
-		setBoardCell(cursor.x, cursor.y, game.nextPiece.color)
+	if !clearOnly {
+		for _, point := range game.nextPiece.rotations[0] {
+			cursor := previewPieceOffset.plus(Vector{point.x * 2, point.y})
+			setBoardCell(cursor.x, cursor.y, game.nextPiece.color)
+		}
 	}
 
+	// Draw the current score.  If clearOnly, do the same.
 	score := game.score
 	cursor := Vector{(width * 2) + 18, headerHeight + previewHeight + 7}
 	for {
@@ -324,36 +334,23 @@ func (game *Game) Draw(fullRedraw bool) {
 	termbox.Flush()
 }
 
-// Pause or unpause the game, depending on game.paused
-func (game *Game) Pause() {
+// Pause or unpause the game, depending on game.paused.
+func (game *Game) PauseToggle() {
 	if game.paused {
-		game.paused = false
-		game.Draw(true)
+		drawStaticBoardParts()
+		game.DrawDynamic(false)
 		game.startTicker()
 	} else {
 		game.stopTicker()
 		game.DrawPauseScreen()
-		game.paused = true
 	}
+	game.paused = !game.paused
 }
 
-// Draw the pause screen, hiding the game board and next piece
+// Draw the pause screen, hiding the game board and next piece.
 func (game *Game) DrawPauseScreen() {
-	// Clear the preview piece box.
-	previewPieceOffset := Vector{(width * 2) + 8, headerHeight + 3}
-	for x := 0; x < 6; x++ {
-		for y := 0; y < 4; y++ {
-			cursor := previewPieceOffset.plus(Vector{x, y})
-			setCell(cursor.x, cursor.y, ' ', termbox.ColorDefault)
-		}
-	}
-
-	// Clear the board 
-	for x := 0; x < width; x++ {
-		for y := 0; y < height; y++ {
-			setBoardCell((x*2)+2, headerHeight+y+2, backgroundColor)
-		}
-	}
+	// Clear the board and preview screen
+	game.DrawDynamic(true)
 
 	// Draw PAUSED overlay
 	for y := (totalHeight/2 - 1); y <= (totalHeight/2)+1; y++ {
