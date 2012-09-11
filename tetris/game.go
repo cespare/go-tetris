@@ -240,8 +240,8 @@ func (game *Game) anchor() {
 	// Bring in the next piece.
 	game.board.currentPiece = game.nextPiece
 	game.board.currentPosition = Vector{initialX, 0}
+	game.board.currentPiece.currentRotation = 0
 	game.nextPiece = game.GeneratePiece()
-	game.nextPiece.currentRotation = 0
 
 	if game.board.currentPieceInCollision() {
 		game.over = true
