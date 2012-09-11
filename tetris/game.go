@@ -37,7 +37,7 @@ func NewGame() *Game {
 	game.pieces = tetrisPieces()
 	game.board = newBoard()
 	game.board.currentPiece = game.GeneratePiece()
-	game.board.currentPosition = Vector{initialX, 0}
+	game.board.currentPosition = game.board.currentPiece.initialLocation
 	game.nextPiece = game.GeneratePiece()
 	game.paused = false
 	game.over = false
@@ -239,8 +239,8 @@ func (game *Game) anchor() {
 
 	// Bring in the next piece.
 	game.board.currentPiece = game.nextPiece
-	game.board.currentPosition = Vector{initialX, 0}
 	game.board.currentPiece.currentRotation = 0
+	game.board.currentPosition = game.board.currentPiece.initialLocation
 	game.nextPiece = game.GeneratePiece()
 
 	if game.board.currentPieceInCollision() {
@@ -305,7 +305,7 @@ func (game *Game) DrawDynamic(clearOnly bool) {
 
 	// Print the preview piece. Need to clear the box first.  Draw next piece only if clearOnly is false
 	previewPieceOffset := Vector{(width * 2) + 8, headerHeight + 3}
-	for x := 0; x < 6; x++ {
+	for x := 0; x < 8; x++ {
 		for y := 0; y < 4; y++ {
 			cursor := previewPieceOffset.plus(Vector{x, y})
 			setCell(cursor.x, cursor.y, ' ', termbox.ColorDefault)
