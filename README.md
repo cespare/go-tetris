@@ -1,8 +1,12 @@
 A simple terminal tetris implementation in Go.
 
+## Installation:
+
+    $ go get github.com/cespare/go-tetris
+
 ## Usage:
 
-		$ go run tetris.go
+    $ go-tetris
 
 ## Controls
 
@@ -28,10 +32,10 @@ A simple terminal tetris implementation in Go.
 * Game Over
 * Line clearing animations
 * Speeding up
+* Pausing
 
 ## To implement
 
-* Pausing
+* High scores
 * Music + sound effects
 * 'Ghost' piece showing where your piece will land
-* High scores
