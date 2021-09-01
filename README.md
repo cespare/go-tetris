@@ -2,11 +2,11 @@ A simple terminal tetris implementation in Go.
 
 ## Installation:
 
-    $ go get github.com/cespare/go-tetris
+    go install github.com/cespare/go-tetris@latest
 
 ## Usage:
 
-    $ go-tetris
+    go-tetris
 
 ## Controls
 
